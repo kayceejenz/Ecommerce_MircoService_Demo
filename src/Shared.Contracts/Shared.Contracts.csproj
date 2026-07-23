@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MassTransit is the service bus abstraction layer.
+         Events implement MassTransit's IMessage interface for type-safe pub/sub.
+         Each service uses MassTransit to publish and consume these events. -->
+    <PackageReference Include="MassTransit" Version="8.2.*" />
+  </ItemGroup>
+
+</Project>
