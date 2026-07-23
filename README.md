@@ -145,24 +145,8 @@ Query (Read):
 ```
 
 **Saga State Machine:**
-```
-[Initial] ──OrderPlaced──► [Started]
-    │
-    │ ReserveInventoryCommand → InventoryService
-    │
-    ├──InventoryReserved──► [InventoryReserved]
-    │                           │
-    │                    ProcessPaymentCommand → PaymentService
-    │                           │
-    │               ┌───────────┼───────────┐
-    │               │                       │
-    │        PaymentSucceeded          PaymentFailed
-    │               │                       │
-    ▼               ▼                       ▼
-        [Completed]                  [Failed]
-                                    (ReleaseInventoryCommand)
-                                    (OrderCancelled event)
-```
+
+![Saga State Machine](resources/saga_state.png)
 
 ---
 
