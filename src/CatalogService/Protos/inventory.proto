@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+// Package name prevents naming conflicts in proto definitions
+package inventory;
+
+// C# namespace for the generated code
+option csharp_namespace = "CatalogService.Protos";
+
+
+// Request to watch stock levels for specific products
+message StockWatchRequest {
+  // List of product IDs to monitor.
+  // Empty list = watch ALL products.
+  repeated string product_ids = 1;
+}
+
+// A single stock update pushed from server to client
+message StockUpdate {
+  string product_id = 1;           // Which product changed
+  string product_name = 2;         // Human-readable name
+  int32 available_quantity = 3;    // Current available stock
+  int32 reserved_quantity = 4;     // Stock reserved by pending orders
+  StockChangeReason reason = 5;    // Why the stock changed
+}
+
+// Why the stock level changed
+enum StockChangeReason {
+  ORDER_PLACED = 0;              // Stock decremented for new order
+  ORDER_CANCELLED = 1;           // Stock restored from cancelled order
+  RESTOCK = 2;                   // New inventory added
+  MANUAL_ADJUSTMENT = 3;         // Admin manually adjusted
+}
+
+
+// InventoryService exposes a gRPC service for real-time stock monitoring.
+service InventoryGrpcService {
+  // Server streaming: client subscribes, server pushes updates.
+  // Used by CatalogService to show real-time stock levels.
+  rpc WatchStockLevels (StockWatchRequest) returns (stream StockUpdate);
+}
