@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package order;
+
+option csharp_namespace = "OrderService.Protos";
+
+// Request to create a new order via gRPC
+message CreateOrderGrpcRequest {
+  string customer_id = 1;
+  repeated OrderItemRequest items = 2;
+}
+
+message OrderItemRequest {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+// Response after order creation
+message CreateOrderGrpcResponse {
+  string order_id = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+// Request to get an order
+message GetOrderGrpcRequest {
+  string order_id = 1;
+}
+
+// Order details response
+message OrderGrpcResponse {
+  string order_id = 1;
+  string customer_id = 2;
+  repeated OrderItemResponse items = 3;
+  double total_amount = 4;
+  string status = 5;
+  string created_at = 6;
+}
+
+message OrderItemResponse {
+  string product_id = 1;
+  string product_name = 2;
+  int32 quantity = 3;
+  double unit_price = 4;
+}
+
+// gRPC Service Definition
+service OrderGrpcService {
+  // Create an order via gRPC (triggers saga)
+  rpc CreateOrder (CreateOrderGrpcRequest) returns (CreateOrderGrpcResponse);
+  
+  // Get order details via gRPC
+  rpc GetOrder (GetOrderGrpcRequest) returns (OrderGrpcResponse);
+}
