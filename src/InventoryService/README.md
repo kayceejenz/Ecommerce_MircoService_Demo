@@ -8,47 +8,7 @@ InventoryService is the single source of truth for product stock levels. It part
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     InventoryService                          │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │              MassTransit Consumers                     │  │
-│  │                                                        │  │
-│  │  OrderPlacedConsumer ──────► Reserve Stock             │  │
-│  │     (IConsumer<OrderPlaced>)    ├── Publish InventoryReserved│
-│  │                                ├── Publish InventoryReservationFailed│
-│  │                                └── Publish InventoryLow│  │
-│  │                                                        │  │
-│  │  OrderCancelledConsumer ────► Release Stock            │  │
-│  │     (IConsumer<OrderCancelled>)                        │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                          │                                   │
-│                          ▼                                   │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │                InventoryController                     │  │
-│  │              (REST API for queries)                    │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                          │                                   │
-│                          ▼                                   │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │              InventoryDbContext                         │  │
-│  │            (PostgreSQL: inventory_db)                   │  │
-│  │                                                        │  │
-│  │  inventory_items table:                                │  │
-│  │  - Id (Product ID)                                     │  │
-│  │  - ProductName                                         │  │
-│  │  - AvailableQuantity                                   │  │
-│  │  - ReservedQuantity                                    │  │
-│  │  - ReorderThreshold                                    │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-         ▲                          │
-         │                          ▼
-    RabbitMQ                   PostgreSQL
-  (OrderPlaced,          (inventory_db)
-   OrderCancelled)
-```
+![Inventory Architecture](../../resources/inventory_internal.png)
 
 ## How It Works
 
