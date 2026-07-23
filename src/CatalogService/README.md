@@ -45,22 +45,7 @@ The `ProductsController` exposes full CRUD operations with Redis caching:
 
 **Cache-aside pattern** (lazy loading):
 
-```
-Client Request
-     │
-     ▼
-Check Redis Cache
-     │
-     ├── HIT ──► Return cached data
-     │
-     └── MISS ─► Query PostgreSQL
-                      │
-                      ▼
-                 Store in Redis (TTL: 5 minutes)
-                      │
-                      ▼
-                 Return data
-```
+![Cache-Aside Pattern](../../resources/cache_aside.png)
 
 **Cache Keys:**
 | Key Pattern | Data | TTL |
