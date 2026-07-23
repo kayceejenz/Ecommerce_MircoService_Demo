@@ -8,35 +8,7 @@ PaymentService handles the payment processing step of the order saga. It receive
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     PaymentService                            │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │              ProcessPaymentConsumer                    │  │
-│  │           (IConsumer<ProcessPaymentCommand>)           │  │
-│  │                                                        │  │
-│  │  1. Receives command from RabbitMQ                     │  │
-│  │  2. Simulates 500ms payment processing                 │  │
-│  │  3. 90% success rate (random)                          │  │
-│  │  4. Publishes PaymentSucceeded or PaymentFailed        │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │              PaymentsController                        │  │
-│  │             (REST API - status queries)                │  │
-│  │                                                        │  │
-│  │  - In-memory payment records                          │  │
-│  │  - GET /api/payments/{id}                             │  │
-│  │  - GET /api/payments/order/{orderId}                  │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-         ▲                          │
-         │                          ▼
-      RabbitMQ               NotificationService
-   (ProcessPaymentCommand)   (PaymentSucceeded,
-                               PaymentFailed)
-```
+![Payment Architecture](../../resources/payment_internal.png)
 
 ## How It Works
 
