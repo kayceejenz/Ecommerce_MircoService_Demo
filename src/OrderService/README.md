@@ -8,56 +8,7 @@ OrderService is the core domain service that manages the order lifecycle. It coo
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          OrderService                                 │
-│                                                                      │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │                     REST API Layer                              │  │
-│  │  OrdersController  ─────────────────────────────────────────►  │  │
-│  └──────────────┬────────────────────────────────────────────────┘  │
-│                 │                                                    │
-│                 ▼                                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │                    CQRS Layer (MediatR)                         │  │
-│  │                                                                 │  │
-│  │  WRITE SIDE:                      READ SIDE:                    │  │
-│  │  PlaceOrderCommand                GetOrderQuery                 │  │
-│  │        │                                 │                      │  │
-│  │        ▼                                 ▼                      │  │
-│  │  PlaceOrderHandler               GetOrderHandler                │  │
-│  │        │                                 │                      │  │
-│  │        ▼                                 ▼                      │  │
-│  │  Order Aggregate              PostgreSQL Read Model             │  │
-│  │  (Event Sourcing)             (Denormalized DTOs)               │  │
-│  │        │                                                    │  │
-│  │        ▼                                                    │  │
-│  │  EventStoreDB                                                    │  │
-│  │  (Immutable Events)                                              │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-│                 │                                                    │
-│                 ▼                                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │              Saga Orchestrator (MassTransit)                    │  │
-│  │                                                                 │  │
-│  │  OrderStateMachine  ─────►  OrderSagaState                     │  │
-│  │  (State machine logic)        (Persisted in PostgreSQL)         │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-│                 │                                                    │
-│                 ▼                                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │                    gRPC Server                                  │  │
-│  │  OrderGrpcServiceImpl  (for internal service-to-service calls)  │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
-         │                            │
-         ▼                            ▼
-  ┌──────────────┐           ┌──────────────────┐
-  │ EventStoreDB │           │ PostgreSQL (x2)   │
-  │ (Events)     │           │ order_read_db     │
-  └──────────────┘           │ saga_state_db     │
-                             └──────────────────┘
-```
+![Order Architecture](../../resources/order_internal.png)
 
 ## How It Works
 
