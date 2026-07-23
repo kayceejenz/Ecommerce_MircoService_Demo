@@ -1,0 +1,48 @@
+# Prometheus scrapes (pulls) metrics from each microservice at regular intervals.
+# Each service exposes a /metrics endpoint (via OpenTelemetry) that Prometheus
+# queries to collect:
+#   - Request rates (requests per second)
+#   - Latency histograms (p50, p95, p99 response times)
+#   - Error rates (4xx, 5xx responses)
+#   - gRPC metrics (calls, latencies)
+#   - Custom business metrics (orders placed, payments processed)
+#
+# Access Prometheus UI: http://localhost:9090
+
+global:
+  scrape_interval: 15s # How often to pull metrics from services
+  evaluation_interval: 15s # How often to evaluate alerting rules
+
+scrape_configs:
+  # -------------------------------------------------------------------------
+  # Microservice Metrics
+  # -------------------------------------------------------------------------
+  # Each target is a Docker service name. Docker DNS resolves these to
+  # container IPs within the microservice-net network.
+  #
+  # The port (8080) is the INTERNAL container port, not the host-mapped port.
+  # Prometheus runs inside Docker, so it uses container-to-container networking.
+  # -------------------------------------------------------------------------
+  - job_name: "microservices"
+    metrics_path: "/metrics" # OpenTelemetry default metrics endpoint
+    static_configs:
+      - targets:
+          - "api-gateway:8080"
+          - "catalog-service:8080"
+          - "order-service:8080"
+          - "inventory-service:8080"
+          - "payment-service:8080"
+          - "notification-service:8080"
+
+  # -------------------------------------------------------------------------
+  # Infrastructure Metrics (optional - for deeper monitoring)
+  # -------------------------------------------------------------------------
+  # Uncomment to also scrape infrastructure metrics:
+  #
+  # - job_name: 'rabbitmq'
+  #   static_configs:
+  #     - targets: ['rabbitmq:15692']  # RabbitMQ Prometheus plugin
+  #
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']  # If using postgres_exporter

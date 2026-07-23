@@ -1,0 +1,417 @@
+version: "3.9"
+
+# This file defines ALL infrastructure containers and application services.
+# Architecture: E-Commerce Order Processing System
+#
+# INFRASTRUCTURE SERVICES:
+#   - RabbitMQ:      Message broker for event-driven (pub/sub) communication
+#   - EventStoreDB:  Event store for CQRS + Event Sourcing in OrderService
+#   - PostgreSQL:    Relational DB for read models, saga state, catalog, inventory
+#   - Redis:         Cache for catalog data, rate limiting
+#
+# OBSERVABILITY:
+#   - Jaeger:        Distributed tracing (OpenTelemetry)
+#   - Prometheus:    Metrics collection
+#   - Grafana:       Metrics dashboards
+#
+# APPLICATION SERVICES (built from Dockerfiles):
+#   - ApiGateway:          Entry point with Polly resilience
+#   - CatalogService:      Product catalog (REST + gRPC)
+#   - OrderService:        Orders (CQRS + Event Sourcing + Saga)
+#   - InventoryService:    Stock management (Event-driven + gRPC)
+#   - PaymentService:      Payments (Saga participant)
+#   - NotificationService: Notifications (Event-driven + gRPC streaming)
+
+networks:
+  microservice-net:
+    driver: bridge
+
+services:
+  # -------------------------------------------------------------------------
+  # RabbitMQ - Message Broker
+  # -------------------------------------------------------------------------
+  # WHY: Enables asynchronous, decoupled communication between services.
+  #       Services publish events (e.g., OrderPlaced) and other services
+  #       subscribe to react to those events without direct coupling.
+  #
+  # Management UI: http://localhost:15672 (guest/guest)
+  # AMQP Port:     5672 (used by MassTransit in each service)
+  # -------------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # AMQP protocol - services connect here
+      - "15672:15672" # Management UI - you can browse queues/exchanges
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - microservice-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------------------------------------------------
+  # EventStoreDB - Event Sourcing Database
+  # -------------------------------------------------------------------------
+  # WHY: Stores events (not state) for the OrderService CQRS write model.
+  #       Every state change is stored as an immutable event.
+  #       Projections subscribe to events to build read models.
+  #
+  # HTTP API:  http://localhost:2113 (browse streams, subscriptions)
+  # TCP:       1113 (gRPC client connection)
+  # -------------------------------------------------------------------------
+  eventstoredb:
+    image: eventstore/eventstore:latest
+    container_name: eventstoredb
+    environment:
+      - EVENTSTORE_INSECURE=true # No TLS for dev
+      - EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP=true # Browse events via HTTP
+      - EVENTSTORE_RUN_PROJECTIONS=All # Enable projections
+      - EVENTSTORE_START_STANDARD_PROJECTIONS=true # Auto-start built-in projections
+    ports:
+      - "2113:2113" # HTTP API / Atom feeds - browse events in browser
+      - "1113:1113" # TCP (legacy) - gRPC client connections
+    volumes:
+      - eventstore-data:/var/lib/eventstore
+    networks:
+      - microservice-net
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -sf http://localhost:2113/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL - Relational Database
+  # -------------------------------------------------------------------------
+  # WHY: Stores read models (CQRS queries), saga state, catalog data,
+  #       and inventory records. Each service gets its own database.
+  #
+  # Connection: localhost:5432 (postgres/postgres)
+  # Databases created by init script:
+  #   - catalog_db:     Product catalog
+  #   - order_read_db:  Order read model (CQRS)
+  #   - saga_state_db:  Saga state persistence
+  #   - inventory_db:   Stock records
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres # Default DB, init script creates others
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d # Run SQL scripts on first start
+    networks:
+      - microservice-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------------------------------------------------
+  # Redis - Cache & Session Store
+  # -------------------------------------------------------------------------
+  # WHY: Caches catalog data to reduce DB load, used for rate limiting
+  #       in the API Gateway.
+  #
+  # Connection: localhost:6379
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - microservice-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------------------------------------------------
+  # Jaeger - Distributed Tracing
+  # -------------------------------------------------------------------------
+  # WHY: Tracks requests across all services. When a request hits the API
+  #       Gateway and fans out to Catalog, Order, and Payment services,
+  #       Jaeger shows the full trace with timing for each hop.
+  #
+  # UI: http://localhost:16686
+  # Receives traces via OTLP (OpenTelemetry Protocol) on port 4317
+  # -------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # Jaeger UI - view distributed traces
+      - "4317:4317" # OTLP gRPC - services send traces here
+      - "4318:4318" # OTLP HTTP - alternative trace ingestion
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # Prometheus - Metrics Collection
+  # -------------------------------------------------------------------------
+  # WHY: Scrapes metrics from all services (request rates, latencies,
+  #       error rates, queue depths) for monitoring and alerting.
+  #
+  # UI: http://localhost:9090
+  # -------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # Grafana - Metrics Dashboards
+  # -------------------------------------------------------------------------
+  # WHY: Visualizes Prometheus metrics with pre-built dashboards
+  #       for request latency, error rates, throughput.
+  #
+  # UI: http://localhost:3000 (admin/admin)
+  # -------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # API Gateway - Entry Point + Service Mesh Simulation
+  # -------------------------------------------------------------------------
+  # WHY: Single entry point for external clients. Handles:
+  #   - Request routing to backend services
+  #   - JWT authentication/authorization
+  #   - Circuit breakers, retries, timeouts (Polly v8)
+  #   - Rate limiting
+  #
+  # This simulates a service mesh (like Istio/Envoy) without requiring
+  # Kubernetes infrastructure.
+  #
+  # Ports: 5000 (HTTP), 5001 (HTTPS)
+  # -------------------------------------------------------------------------
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/Dockerfile
+    container_name: api-gateway
+    ports:
+      - "5000:8080"
+      - "5001:8443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - CatalogService__BaseUrl=http://catalog-service:5010
+      - OrderService__BaseUrl=http://order-service:5020
+      - OrderService__GrpcUrl=http://order-service:5021
+      - PaymentService__BaseUrl=http://payment-service:5040
+      - RabbitMQ__Host=rabbitmq
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # Catalog Service - Product Catalog (REST + gRPC)
+  # -------------------------------------------------------------------------
+  # WHY: Manages products, pricing, and inventory views.
+  #   - REST API: Product CRUD for external clients
+  #   - gRPC Server: Streams real-time inventory updates to CatalogService
+  #
+  # Demonstrates: REST/HTTP2, gRPC Server Streaming, Redis caching
+  #
+  # Ports: 5010 (REST), 5011 (gRPC)
+  # -------------------------------------------------------------------------
+  catalog-service:
+    build:
+      context: .
+      dockerfile: src/CatalogService/Dockerfile
+    container_name: catalog-service
+    ports:
+      - "5010:8080"
+      - "5011:8443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__CatalogDb=Host=postgres;Database=catalog_db;Username=postgres;Password=postgres
+      - ConnectionStrings__Redis=redis:6379
+      - RabbitMQ__Host=rabbitmq
+      - InventoryService__GrpcUrl=http://inventory-service:5031
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # Order Service - CQRS + Event Sourcing + Saga Orchestrator
+  # -------------------------------------------------------------------------
+  # WHY: Core domain service demonstrating:
+  #   - CQRS: Commands (write) go to EventStoreDB, Queries (read) hit PostgreSQL
+  #   - Event Sourcing: All state changes stored as immutable events
+  #   - Saga Orchestrator: Coordinates distributed transactions
+  #     (ReserveInventory -> ProcessPayment -> ConfirmOrder)
+  #
+  # Demonstrates: CQRS, Event Sourcing, Saga pattern, gRPC
+  #
+  # Ports: 5020 (REST), 5021 (gRPC)
+  # -------------------------------------------------------------------------
+  order-service:
+    build:
+      context: .
+      dockerfile: src/OrderService/Dockerfile
+    container_name: order-service
+    ports:
+      - "5020:8080"
+      - "5021:8443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__OrderReadDb=Host=postgres;Database=order_read_db;Username=postgres;Password=postgres
+      - ConnectionStrings__SagaStateDb=Host=postgres;Database=saga_state_db;Username=postgres;Password=postgres
+      - EventStore__ConnectionString=esdb://eventstoredb:2113?tls=false
+      - RabbitMQ__Host=rabbitmq
+      - CatalogService__BaseUrl=http://catalog-service:5010
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    depends_on:
+      eventstoredb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # Inventory Service - Stock Management (Event-Driven + gRPC)
+  # -------------------------------------------------------------------------
+  # WHY: Manages stock levels, responds to order events.
+  #   - Subscribes to OrderPlaced/OrderCancelled events
+  #   - Publishes InventoryLow events when stock is low
+  #   - gRPC streaming pushes real-time stock updates to CatalogService
+  #
+  # Demonstrates: Event-driven pub/sub, gRPC Server Streaming
+  #
+  # Ports: 5030 (REST), 5031 (gRPC)
+  # -------------------------------------------------------------------------
+  inventory-service:
+    build:
+      context: .
+      dockerfile: src/InventoryService/Dockerfile
+    container_name: inventory-service
+    ports:
+      - "5030:8080"
+      - "5031:8443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__InventoryDb=Host=postgres;Database=inventory_db;Username=postgres;Password=postgres
+      - RabbitMQ__Host=rabbitmq
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # Payment Service - Saga Participant + Event Publisher
+  # -------------------------------------------------------------------------
+  # WHY: Processes payments and refunds. Participates in the order saga:
+  #   - Receives ProcessPayment command from OrderService saga
+  #   - Publishes PaymentSucceeded/PaymentFailed events
+  #   - NotificationService reacts to payment events
+  #
+  # Demonstrates: Saga participant, event publishing
+  #
+  # Port: 5040 (REST)
+  # -------------------------------------------------------------------------
+  payment-service:
+    build:
+      context: .
+      dockerfile: src/PaymentService/Dockerfile
+    container_name: payment-service
+    ports:
+      - "5040:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - RabbitMQ__Host=rabbitmq
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservice-net
+
+  # -------------------------------------------------------------------------
+  # Notification Service - Event Consumer + gRPC Streaming
+  # -------------------------------------------------------------------------
+  # WHY: Sends notifications (email, SMS, dashboard) based on events:
+  #   - Subscribes to PaymentSucceeded, PaymentFailed, InventoryLow events
+  #   - gRPC streaming pushes real-time notifications to dashboard clients
+  #
+  # Demonstrates: Pure event-driven consumer, gRPC Server Streaming
+  #
+  # Ports: 5050 (REST), 5051 (gRPC)
+  # -------------------------------------------------------------------------
+  notification-service:
+    build:
+      context: .
+      dockerfile: src/NotificationService/Dockerfile
+    container_name: notification-service
+    ports:
+      - "5050:8080"
+      - "5051:8443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - RabbitMQ__Host=rabbitmq
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservice-net
+
+# Data survives container restarts. Remove with: docker volume rm <name>
+volumes:
+  rabbitmq-data:
+  eventstore-data:
+  postgres-data:
+  redis-data:
+  grafana-data:
