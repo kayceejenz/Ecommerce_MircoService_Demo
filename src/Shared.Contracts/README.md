@@ -253,15 +253,7 @@ All services (ApiGateway, CatalogService, OrderService, InventoryService, Paymen
 
 ## Event Flow Through the System
 
-```
-OrderService                    InventoryService              PaymentService           NotificationService
-    |                                |                            |                           |
-    |-- OrderPlaced event ---------> |                            |                           |
-    |                                |-- InventoryReserved -----> |                           |
-    |                                |                            |-- PaymentSucceeded -----> |
-    |                                |                            |                           |-- Logs: "Payment confirmed"
-    |<-- (saga completes)           |                            |                           |
-```
+![Event Flow Through the System](../../resources/event_flow.png)
 
 ## How to Test
 
