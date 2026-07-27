@@ -228,10 +228,10 @@ services:
       - "5001:8443"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - CatalogService__BaseUrl=http://catalog-service:5010
-      - OrderService__BaseUrl=http://order-service:5020
-      - OrderService__GrpcUrl=http://order-service:5021
-      - PaymentService__BaseUrl=http://payment-service:5040
+      - CatalogService__BaseUrl=http://catalog-service:8080
+      - OrderService__BaseUrl=http://order-service:8080
+      - OrderService__GrpcUrl=http://order-service:8443
+      - PaymentService__BaseUrl=http://payment-service:8080
       - RabbitMQ__Host=rabbitmq
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
     depends_on:
@@ -266,7 +266,7 @@ services:
       - ConnectionStrings__CatalogDb=Host=postgres;Database=catalog_db;Username=postgres;Password=postgres
       - ConnectionStrings__Redis=redis:6379
       - RabbitMQ__Host=rabbitmq
-      - InventoryService__GrpcUrl=http://inventory-service:5031
+      - InventoryService__GrpcUrl=http://inventory-service:8443
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
     depends_on:
       postgres:
@@ -303,9 +303,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__OrderReadDb=Host=postgres;Database=order_read_db;Username=postgres;Password=postgres
       - ConnectionStrings__SagaStateDb=Host=postgres;Database=saga_state_db;Username=postgres;Password=postgres
-      - EventStore__ConnectionString=esdb://eventstoredb:2113?tls=false
+      - ConnectionStrings__EventStore=esdb://eventstoredb:2113?tls=false
       - RabbitMQ__Host=rabbitmq
-      - CatalogService__BaseUrl=http://catalog-service:5010
+      - CatalogService__BaseUrl=http://catalog-service:8080
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
     depends_on:
       eventstoredb:

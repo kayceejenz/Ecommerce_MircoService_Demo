@@ -60,19 +60,19 @@ static void ConfigureResilience(HttpStandardResilienceOptions options)
 
 builder.Services.AddHttpClient<CatalogClient>(name: "CatalogClient", client =>
 {
-    client.BaseAddress = new Uri(config["CatalogService__BaseUrl"] ?? "http://localhost:5010");
+    client.BaseAddress = new Uri(config["CatalogService:BaseUrl"] ?? "http://localhost:5010");
 })
 .AddStandardResilienceHandler(ConfigureResilience);
 
 builder.Services.AddHttpClient<OrderClient>(name: "OrderClient", client =>
 {
-    client.BaseAddress = new Uri(config["OrderService__BaseUrl"] ?? "http://localhost:5020");
+    client.BaseAddress = new Uri(config["OrderService:BaseUrl"] ?? "http://localhost:5020");
 })
 .AddStandardResilienceHandler(ConfigureResilience);
 
 builder.Services.AddHttpClient<PaymentClient>(name: "PaymentClient", client =>
 {
-    client.BaseAddress = new Uri(config["PaymentService__BaseUrl"] ?? "http://localhost:5040");
+    client.BaseAddress = new Uri(config["PaymentService:BaseUrl"] ?? "http://localhost:5040");
 })
 .AddStandardResilienceHandler(ConfigureResilience);
 

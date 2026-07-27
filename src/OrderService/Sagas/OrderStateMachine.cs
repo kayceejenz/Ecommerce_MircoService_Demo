@@ -123,6 +123,18 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaState>
             .CorrelateById(context => context.Message.OrderId)
             .SelectId(context => context.Message.OrderId));
 
+        Event(() => InventoryReservedEvent, x => x
+            .CorrelateById(context => context.Message.OrderId));
+
+        Event(() => InventoryReservationFailed, x => x
+            .CorrelateById(context => context.Message.OrderId));
+
+        Event(() => PaymentSucceeded, x => x
+            .CorrelateById(context => context.Message.OrderId));
+
+        Event(() => PaymentFailed, x => x
+            .CorrelateById(context => context.Message.OrderId));
+
         Initially(
             When(OrderPlaced)
                 .Then(context =>
