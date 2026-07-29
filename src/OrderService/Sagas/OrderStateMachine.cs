@@ -46,6 +46,7 @@
 //   3. PaymentSucceeded event -> StateMachine transitions -> Order Completed
 //   4. PaymentFailed event -> StateMachine transitions -> sends ReleaseInventory command
 
+using System.Text.Json;
 using MassTransit;
 using Shared.Contracts.Events;
 
@@ -56,16 +57,6 @@ public record ReleaseInventoryCommand
     public Guid OrderId { get; init; }
 }
 
-
-
-// This entity stores the current state of each saga instance.
-// MassTransit automatically manages this via Entity Framework Core.
-//
-// WHY PERSIST SAGA STATE:
-//   - Sagas can span minutes/hours (wait for payment, shipping)
-//   - Service might restart during the saga
-//   - State must survive restarts to resume correctly
-// =============================================================================
 public class OrderSagaState : SagaStateMachineInstance
 {
     /// <summary>Unique saga instance ID (typically the OrderId)</summary>
@@ -88,13 +79,11 @@ public class OrderSagaState : SagaStateMachineInstance
 
     /// <summary>Failure reason if saga failed</summary>
     public string? FailureReason { get; set; }
+
+    /// <summary>Order line items (JSON) for compensation actions</summary>
+    public string? ItemsJson { get; set; }
 }
 
-// MassTransit uses a fluent API to define:
-//   - States: Possible saga states
-//   - Events: Messages that trigger transitions
-//   - Transitions: State -> Event -> New State
-//   - Activities: Business logic executed during transitions
 public class OrderStateMachine : MassTransitStateMachine<OrderSagaState>
 {
     // Each state represents a stage in the order processing workflow.
@@ -149,6 +138,7 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaState>
                     context.Saga.OrderId = context.Message.OrderId;
                     context.Saga.CustomerId = context.Message.CustomerId;
                     context.Saga.StartedAt = DateTime.UtcNow;
+                    context.Saga.ItemsJson = JsonSerializer.Serialize(context.Message.Items);
 
                     Log(context, "Saga started for order {OrderId}", context.Message.OrderId);
                 })
@@ -238,7 +228,8 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaState>
                     OrderId = context.Message.OrderId,
                     CustomerId = context.Message.CustomerId,
                     Reason = $"Payment failed: {context.Message.Reason}",
-                    CancelledAt = DateTime.UtcNow
+                    CancelledAt = DateTime.UtcNow,
+                    Items = JsonSerializer.Deserialize<List<OrderItem>>(context.Saga.ItemsJson ?? "[]")
                 }));
     }
 
