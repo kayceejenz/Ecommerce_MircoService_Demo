@@ -129,7 +129,7 @@ static async Task SeedDataAsync(InventoryDbContext db)
     {
         new InventoryItem
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.Parse("f9dd4662-6ed2-4a64-a52a-2db20c7bee72"),
             ProductName = "Wireless Mouse",
             AvailableQuantity = 150,
             ReservedQuantity = 0,
@@ -137,7 +137,7 @@ static async Task SeedDataAsync(InventoryDbContext db)
         },
         new InventoryItem
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.Parse("b1c2d3e4-f5a6-7890-bcde-f12345678901"),
             ProductName = "Mechanical Keyboard",
             AvailableQuantity = 75,
             ReservedQuantity = 0,
@@ -145,7 +145,7 @@ static async Task SeedDataAsync(InventoryDbContext db)
         },
         new InventoryItem
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.Parse("c2d3e4f5-a6b7-8901-cdef-123456789012"),
             ProductName = "USB-C Hub",
             AvailableQuantity = 200,
             ReservedQuantity = 0,
@@ -153,7 +153,7 @@ static async Task SeedDataAsync(InventoryDbContext db)
         },
         new InventoryItem
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.Parse("d3e4f5a6-b7c8-9012-def1-234567890123"),
             ProductName = "Cotton T-Shirt",
             AvailableQuantity = 500,
             ReservedQuantity = 0,
@@ -161,7 +161,7 @@ static async Task SeedDataAsync(InventoryDbContext db)
         },
         new InventoryItem
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.Parse("e4f5a6b7-c8d9-0123-ef12-345678901234"),
             ProductName = "Running Shoes",
             AvailableQuantity = 100,
             ReservedQuantity = 0,
