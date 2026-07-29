@@ -51,6 +51,13 @@ using Shared.Contracts.Events;
 
 namespace OrderService.Sagas;
 
+public record ReleaseInventoryCommand
+{
+    public Guid OrderId { get; init; }
+}
+
+
+
 // This entity stores the current state of each saga instance.
 // MassTransit automatically manages this via Entity Framework Core.
 //
@@ -145,17 +152,7 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaState>
 
                     Log(context, "Saga started for order {OrderId}", context.Message.OrderId);
                 })
-                .TransitionTo(Started)
-                .Publish(context => new ReserveInventoryCommand
-                {
-                    OrderId = context.Message.OrderId,
-                    CustomerId = context.Message.CustomerId,
-                    Items = context.Message.Items.Select(i => new ReserveInventoryItem
-                    {
-                        ProductId = i.ProductId,
-                        Quantity = i.Quantity
-                    }).ToList()
-                }));
+                .TransitionTo(Started));
 
         // When inventory is reserved:
         //   1. Transition to "InventoryReserved" state
@@ -252,29 +249,4 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaState>
         var logger = loggerFactory.CreateLogger<OrderStateMachine>();
         logger.LogInformation(message, args);
     }
-}
-
-public record ReserveInventoryCommand
-{
-    public Guid OrderId { get; init; }
-    public Guid CustomerId { get; init; }
-    public List<ReserveInventoryItem> Items { get; init; } = new();
-}
-
-public record ReserveInventoryItem
-{
-    public Guid ProductId { get; init; }
-    public int Quantity { get; init; }
-}
-
-public record ReleaseInventoryCommand
-{
-    public Guid OrderId { get; init; }
-}
-
-public record ProcessPaymentCommand
-{
-    public Guid OrderId { get; init; }
-    public Guid CustomerId { get; init; }
-    public decimal Amount { get; init; }
 }

@@ -1,5 +1,4 @@
 using MassTransit;
-using PaymentService.Commands;
 using Shared.Contracts.Events;
 
 namespace PaymentService.Consumers;
